@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
-import scrapeWebsite from "./utils/scraper.js";
+import multer from "multer";
+import fs from "fs";
+import { scrapeWebsite, scrapePDF } from "./utils/scraper.js";
 
 const app = express();
 // Use CORS middleware
@@ -18,6 +20,30 @@ app.post("/scrape", async (req, res) => {
     res.json(data);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+
+// Multer configuration for file uploads
+const upload = multer({ dest: "uploads/" });
+
+app.post("/scrape-pdf", upload.single("file"), async (req, res) => {
+  const file = req.file;
+
+  if (!file) {
+    return res.status(400).json({ error: "No file uploaded." });
+  }
+
+  try {
+    const data = await scrapePDF(file.path);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  } finally {
+    // Cleanup uploaded file
+    fs.unlink(file.path, (err) => {
+      if (err) console.error("Failed to delete uploaded file:", err);
+    });
   }
 });
 
