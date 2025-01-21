@@ -1,21 +1,12 @@
-import puppeteer from "puppeteer";
 import fs from "fs";
-import * as pdfjs from "pdfjs-dist";
-import { fileURLToPath } from 'url';
-import { dirname, resolve  } from 'path';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import pdfjsLib from "pdfjs-dist";
+import puppeteer from "puppeteer";
 
 const scrapePDF = async (filePath) => {
   try {
-    // // Configure worker path
-    // const workerPath = resolve(__dirname, '../node_modules/pdfjs-dist/build/pdf.worker.js');
-    // console.log("Worker exists:", fs.existsSync(workerPath));
-    // pdfjs.GlobalWorkerOptions.workerSrc = workerPath;
-
     // Read and parse PDF
     const data = new Uint8Array(fs.readFileSync(filePath));
-    const pdfDocument = await pdfjs.getDocument({
+    const pdfDocument = await pdfjsLib.getDocument({
       data,
       disableWorker: false, // Ensure worker is enabled
     }).promise;
@@ -180,4 +171,4 @@ const scrapeWebsite = async (url, retryCount = 0) => {
   }
 };
 
-export { scrapeWebsite, scrapePDF };
+export { scrapePDF, scrapeWebsite };
