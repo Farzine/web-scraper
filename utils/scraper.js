@@ -4,41 +4,123 @@ import puppeteer from "puppeteer";
 
 const scrapePDF = async (filePath) => {
   try {
-    // Read and parse PDF
     const data = new Uint8Array(fs.readFileSync(filePath));
     const pdfDocument = await pdfjsLib.getDocument({
       data,
-      disableWorker: false, // Ensure worker is enabled
+      disableWorker: false,
     }).promise;
 
-    let textContent = "";
+    const pages = [];
+    
     for (let i = 1; i <= pdfDocument.numPages; i++) {
       const page = await pdfDocument.getPage(i);
-      const text = await page.getTextContent();
-      textContent += text.items.map((item) => item.str).join(" ") + "\n\n";
+      const textContent = await page.getTextContent();
+      
+      // Get page dimensions for position calculations
+      const viewport = page.getViewport({ scale: 1.0 });
+      const pageHeight = viewport.height;
+      
+      // Group text items by their vertical position (with some tolerance)
+      const lineGroups = {};
+      const tolerance = 3; // Adjust this value based on your needs
+      
+      textContent.items.forEach(item => {
+        // Transform coordinates
+        const y = pageHeight - item.transform[5]; // Flip Y coordinate
+        const x = item.transform[4];
+        
+        // Round the Y position to the nearest group within tolerance
+        const yGroup = Math.round(y / tolerance) * tolerance;
+        
+        if (!lineGroups[yGroup]) {
+          lineGroups[yGroup] = [];
+        }
+        
+        lineGroups[yGroup].push({
+          text: item.str,
+          x: x,
+          fontSize: Math.sqrt(item.transform[0] * item.transform[0] + 
+                            item.transform[1] * item.transform[1]),
+          fontFamily: item.fontName,
+        });
+      });
+      
+      // Sort line groups by vertical position (top to bottom)
+      const sortedLines = Object.entries(lineGroups)
+        .sort(([y1], [y2]) => Number(y1) - Number(y2))
+        .map(([_, items]) => {
+          // Sort items within each line by X position (left to right)
+          const sortedItems = items.sort((a, b) => a.x - b.x);
+          
+          // Detect if this line might be a heading based on font size
+          const avgFontSize = sortedItems.reduce((sum, item) => sum + item.fontSize, 0) / sortedItems.length;
+          const isHeading = avgFontSize > 12; // Adjust threshold as needed
+          
+          return {
+            text: sortedItems.map(item => item.text).join(' '),
+            fontSize: avgFontSize,
+            isHeading: isHeading,
+            fontFamily: sortedItems[0].fontFamily // Use first item's font family
+          };
+        });
+      
+      // Build structured content for the page
+      const pageContent = {
+        pageNumber: i,
+        content: sortedLines.map(line => ({
+          text: line.text,
+          isHeading: line.isHeading,
+          fontSize: line.fontSize,
+          fontFamily: line.fontFamily
+        }))
+      };
+      
+      pages.push(pageContent);
     }
-
-    // Clean and format results
+    
+    // Extract document title from the first page's first heading
+    const title = extractTitle(pages[0], filePath);
+    
     return {
-      title: extractTitle(textContent, filePath),
-      textContent: cleanText(textContent)
+      title,
+      pages,
+      totalPages: pdfDocument.numPages
     };
+    
   } catch (error) {
     throw new Error(`PDF processing failed: ${error.message}`);
   }
 };
 
-// Helper functions
-const extractTitle = (text, filePath) => {
-  const firstLine = text.split('\n')[0]?.trim().substring(0, 200);
-  return firstLine || filePath.split('/').pop().replace(/\.[^/.]+$/, "") || "Untitled Document";
+// Helper function to extract title
+const extractTitle = (firstPage, filePath) => {
+  // Try to find first heading
+  const firstHeading = firstPage.content.find(line => line.isHeading)?.text;
+  if (firstHeading) return firstHeading.trim();
+  
+  // Fallback to first line
+  const firstLine = firstPage.content[0]?.text;
+  if (firstLine) return firstLine.trim();
+  
+  // Final fallback to filename
+  return filePath.split('/').pop().replace(/\.[^/.]+$/, "") || "Untitled Document";
 };
 
-const cleanText = (text) => {
-  return text
-    .replace(/\s+/g, " ")
-    .replace(/\n\s*\n/g, "\n")
-    .trim();
+// Example usage
+const printStructuredContent = (result) => {
+  console.log(`Document Title: ${result.title}`);
+  console.log(`Total Pages: ${result.totalPages}\n`);
+  
+  result.pages.forEach(page => {
+    console.log(`\n=== Page ${page.pageNumber} ===\n`);
+    page.content.forEach(line => {
+      if (line.isHeading) {
+        console.log(`\n## ${line.text} ##`);
+      } else {
+        console.log(line.text);
+      }
+    });
+  });
 };
 
 
