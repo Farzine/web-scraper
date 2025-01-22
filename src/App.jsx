@@ -1,6 +1,7 @@
-import { useState } from "react";
 import axios from "axios";
+import jsPDF from "jspdf";
 import { Loader2 } from "lucide-react";
+import { useState } from "react";
 
 function App() {
   const [url, setUrl] = useState("");
@@ -27,6 +28,17 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDownload = () => {
+    if (!result) return;
+
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(result.title || "Scraped Content", 10, 10);
+    doc.setFontSize(12);
+    doc.text(result.textContent || "", 10, 20);
+    doc.save("scraped-content.pdf");
   };
 
   const handleFileChange = (e) => {
@@ -60,6 +72,11 @@ function App() {
     }
   };
 
+  const handleCopyToClipboard = (content) => {
+    navigator.clipboard.writeText(content);
+    alert("Content copied to clipboard!");
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 py-8">
       <div className="max-w-6xl mx-auto px-4">
@@ -90,6 +107,12 @@ function App() {
               <div className="mt-6">
                 <h3 className="text-lg font-bold">{result.title}</h3>
                 <p className="mt-2 whitespace-pre-wrap">{result.textContent}</p>
+                <button
+                  onClick={handleDownload}
+                  className="mt-4 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors duration-200"
+                >
+                  Download as PDF
+                </button>
               </div>
             )}
           </div>
@@ -123,7 +146,6 @@ function App() {
                     Total Pages: {pdfresult.totalPages}
                   </p>
                 </div>
-                
                 <div className="space-y-6">
                   {pdfresult.pages.map((page) => (
                     <div
@@ -154,6 +176,12 @@ function App() {
                     </div>
                   ))}
                 </div>
+                <button
+                  onClick={() => handleCopyToClipboard(JSON.stringify(pdfresult, null, 2))}
+                  className="mt-4 px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition-colors duration-200"
+                >
+                  Copy Content
+                </button>
               </div>
             )}
           </div>
